@@ -3,7 +3,43 @@ use strict;
 use warnings;
 our $VERSION = '0.01';
 use Class::Load;
-use parent 'Amon2::Web::Dispatcher::RouterSimple';
+use Router::Simple 0.03;
+
+#xxx copy from Amon2::Web::Dispatcher::RouterSimple
+sub import {
+    my $class = shift;
+    my %args = @_;
+    my $caller = caller(0);
+
+    my $router = Router::Simple->new();
+
+    no strict 'refs';
+    # functions
+    *{"${caller}::connect"} = sub {
+        if (@_ == 2 && !ref $_[1]) {
+            my ($path, $dest_str) = @_;
+            my ($controller, $action) = split('#', $dest_str);
+            my %dest;
+            $dest{controller} = $controller;
+            $dest{action} = $action if defined $action;
+            $router->connect($path, \%dest);
+        } else {
+            $router->connect(@_);
+        }
+    };
+    *{"${caller}::submapper"} = sub {
+        $router->submapper(@_);
+    };
+    # class methods
+    *{"${caller}::router"} = sub { $router };
+    for my $meth (qw/match as_string/) {
+        *{"$caller\::${meth}"} = sub {
+            my $self = shift;
+            $router->$meth(@_)
+        };
+    }
+    *{"$caller\::dispatch"} = \&_dispatch;
+}
 
 sub _dispatch {
     my ($class, $c) = @_;
